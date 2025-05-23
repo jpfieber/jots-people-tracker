@@ -1,6 +1,8 @@
 /* Common styles for links with avatars */
-.internal-link.data-link-icon,                          /* Preview mode */
-.markdown-source-view.mod-cm6.is-live-preview .cm-hmd-internal-link.data-link-icon {  /* Live preview only */
+.internal-link.data-link-icon,
+/* Preview mode */
+.markdown-source-view.mod-cm6.is-live-preview .cm-hmd-internal-link.data-link-icon {
+    /* Live preview only */
     display: inline-flex !important;
     align-items: center !important;
     position: relative !important;
@@ -8,8 +10,10 @@
 }
 
 /* Avatar styles using data attributes */
-.internal-link.data-link-icon::before,                  /* Preview mode */
-.markdown-source-view.mod-cm6.is-live-preview .cm-hmd-internal-link.data-link-icon::before {  /* Live preview only */
+.internal-link.data-link-icon::before,
+/* Preview mode */
+.markdown-source-view.mod-cm6.is-live-preview .cm-hmd-internal-link.data-link-icon::before {
+    /* Live preview only */
     content: '';
     position: absolute !important;
     left: 0 !important;
