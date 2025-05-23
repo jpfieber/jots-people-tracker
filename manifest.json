@@ -1,0 +1,29 @@
+{
+  "id": "jots-people-tracker",
+  "name": "People Tracker",
+  "version": "1.0.0",
+  "description": "A plugin for Obsidian that adds avatars in front of people's names in notes.",
+  "author": "Your Name",
+  "minAppVersion": "0.12.0",
+  "main": "main.js",
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "rollup -c -w"
+  },
+  "dependencies": {
+    "obsidian": "^0.12.0"
+  },
+  "devDependencies": {
+    "rollup": "^2.0.0",
+    "rollup-plugin-typescript2": "^0.30.0",
+    "typescript": "^4.0.0"
+  },
+  "engines": {
+    "obsidian": "^0.12.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/jots-people-tracker.git"
+  },
+  "license": "MIT"
+}

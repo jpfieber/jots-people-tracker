@@ -1,0 +1,30 @@
+{
+  "name": "jots-people-tracker",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "An Obsidian plugin that tracks people and adds avatars to their names in notes.",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "rollup -c -w",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "avatar",
+    "people tracker"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^25.0.0",
+    "@rollup/plugin-node-resolve": "^15.0.0",
+    "@rollup/plugin-typescript": "^12.1.2",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@types/node": "^20.0.0",
+    "obsidian": "^1.8.7",
+    "rollup": "^3.0.0",
+    "typescript": "^5.0.0"
+  }
+}
