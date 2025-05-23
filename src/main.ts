@@ -3,95 +3,17 @@ import { PeopleTrackerSettings, PeopleTrackerSettingTab, DEFAULT_SETTINGS } from
 
 export default class PeopleTrackerPlugin extends Plugin {
     settings!: PeopleTrackerSettings;
-    private processTimer: NodeJS.Timeout | null = null;
+    private processTimer: NodeJS.Timeout | null = null; private tryGetLinkTarget(element: HTMLElement, sourcePath: string): TFile | null {
+        const linkText = element.textContent?.trim();
+        if (!linkText) return null;
 
-    private tryGetLinkTarget(element: HTMLElement, sourcePath: string): TFile | null {
-        // For editor mode links, prioritize text content
-        if (element.classList.contains('cm-underline') && element.textContent) {
-            try {
-                const cleanPath = this.cleanLinkPath(element.textContent, true);
-                const file = this.app.metadataCache.getFirstLinkpathDest(cleanPath, sourcePath);
-                if (file) return file;
-            } catch (e) {
-                console.debug('Error with underline text:', element.textContent, e);
-            }
-        }
-
-        // Try URL attributes next
-        for (const attr of ['data-href', 'href']) {
-            const path = element.getAttribute(attr);
-            if (!path) continue;
-            try {
-                const cleanPath = this.cleanLinkPath(path, false);
-                const file = this.app.metadataCache.getFirstLinkpathDest(cleanPath, sourcePath);
-                if (file) return file;
-            } catch (e) {
-                console.debug(`Error with ${attr}:`, path, e);
-            }
-        }
-
-        // Finally try regular text content
-        if (element.textContent && !element.classList.contains('cm-underline')) {
-            try {
-                const cleanPath = this.cleanLinkPath(element.textContent, true);
-                return this.app.metadataCache.getFirstLinkpathDest(cleanPath, sourcePath);
-            } catch (e) {
-                console.debug('Error with text content:', element.textContent, e);
-            }
-        }
-
-        return null;
-    }
-
-    private cleanLinkPath(path: string, isTextContent: boolean = false): string {
-        if (!path) return '';
-
-        // Remove any leading or trailing whitespace
-        path = path.trim();
-
-        // Handle aliases by taking the part before the | if it exists
-        if (path.includes('|')) {
-            path = path.split('|')[0].trim();
-        }
-
-        // Handle display text in editor mode by taking the part before the ]] if it exists
-        if (path.includes(']]')) {
-            path = path.split(']]')[0].trim();
-        }
-
-        // Handle markdown links by taking the part after [[ if it exists
-        if (path.includes('[[')) {
-            path = path.split('[[').pop()?.trim() || path;
-        }
-
-        // For text content (like "93% Lean"), just normalize whitespace and return as-is
-        if (isTextContent) {
-            return path.replace(/\s+/g, ' ');
-        }
-
-        // For URLs, properly encode all special characters
         try {
-            // First check if it's already a valid URL-encoded string
-            decodeURIComponent(path);
-            return path;
+            return this.app.metadataCache.getFirstLinkpathDest(linkText, sourcePath);
         } catch (e) {
-            // If not, encode special characters
-            return path.replace(/[%\[\]|&?#]/g, (match) => {
-                switch (match) {
-                    case '%': return '%25';
-                    case '[': return '%5B';
-                    case ']': return '%5D';
-                    case '|': return '%7C';
-                    case '&': return '%26';
-                    case '?': return '%3F';
-                    case '#': return '%23';
-                    default: return match;
-                }
-            }).replace(/\s+/g, ' ');
+            console.debug('Error processing link:', linkText, e);
+            return null;
         }
-    }
-
-    async onload() {
+    } async onload() {
         await this.loadSettings();
         this.addSettingTab(new PeopleTrackerSettingTab(this.app, this));
 
