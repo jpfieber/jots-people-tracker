@@ -5,6 +5,92 @@ export default class PeopleTrackerPlugin extends Plugin {
     settings!: PeopleTrackerSettings;
     private processTimer: NodeJS.Timeout | null = null;
 
+    private tryGetLinkTarget(element: HTMLElement, sourcePath: string): TFile | null {
+        // For editor mode links, prioritize text content
+        if (element.classList.contains('cm-underline') && element.textContent) {
+            try {
+                const cleanPath = this.cleanLinkPath(element.textContent, true);
+                const file = this.app.metadataCache.getFirstLinkpathDest(cleanPath, sourcePath);
+                if (file) return file;
+            } catch (e) {
+                console.debug('Error with underline text:', element.textContent, e);
+            }
+        }
+
+        // Try URL attributes next
+        for (const attr of ['data-href', 'href']) {
+            const path = element.getAttribute(attr);
+            if (!path) continue;
+            try {
+                const cleanPath = this.cleanLinkPath(path, false);
+                const file = this.app.metadataCache.getFirstLinkpathDest(cleanPath, sourcePath);
+                if (file) return file;
+            } catch (e) {
+                console.debug(`Error with ${attr}:`, path, e);
+            }
+        }
+
+        // Finally try regular text content
+        if (element.textContent && !element.classList.contains('cm-underline')) {
+            try {
+                const cleanPath = this.cleanLinkPath(element.textContent, true);
+                return this.app.metadataCache.getFirstLinkpathDest(cleanPath, sourcePath);
+            } catch (e) {
+                console.debug('Error with text content:', element.textContent, e);
+            }
+        }
+
+        return null;
+    }
+
+    private cleanLinkPath(path: string, isTextContent: boolean = false): string {
+        if (!path) return '';
+
+        // Remove any leading or trailing whitespace
+        path = path.trim();
+
+        // Handle aliases by taking the part before the | if it exists
+        if (path.includes('|')) {
+            path = path.split('|')[0].trim();
+        }
+
+        // Handle display text in editor mode by taking the part before the ]] if it exists
+        if (path.includes(']]')) {
+            path = path.split(']]')[0].trim();
+        }
+
+        // Handle markdown links by taking the part after [[ if it exists
+        if (path.includes('[[')) {
+            path = path.split('[[').pop()?.trim() || path;
+        }
+
+        // For text content (like "93% Lean"), just normalize whitespace and return as-is
+        if (isTextContent) {
+            return path.replace(/\s+/g, ' ');
+        }
+
+        // For URLs, properly encode all special characters
+        try {
+            // First check if it's already a valid URL-encoded string
+            decodeURIComponent(path);
+            return path;
+        } catch (e) {
+            // If not, encode special characters
+            return path.replace(/[%\[\]|&?#]/g, (match) => {
+                switch (match) {
+                    case '%': return '%25';
+                    case '[': return '%5B';
+                    case ']': return '%5D';
+                    case '|': return '%7C';
+                    case '&': return '%26';
+                    case '?': return '%3F';
+                    case '#': return '%23';
+                    default: return match;
+                }
+            }).replace(/\s+/g, ' ');
+        }
+    }
+
     async onload() {
         await this.loadSettings();
         this.addSettingTab(new PeopleTrackerSettingTab(this.app, this));
@@ -70,58 +156,68 @@ export default class PeopleTrackerPlugin extends Plugin {
     }
 
     private processSection(el: HTMLElement, ctx: MarkdownPostProcessorContext) {
-        el.querySelectorAll('a.internal-link').forEach(linkEl => {
-            if ((linkEl as HTMLElement).hasClass('person-link-processed')) return;
+        try {
+            el.querySelectorAll('a.internal-link').forEach(linkEl => {
+                try {
+                    const element = linkEl as HTMLElement;
+                    if (element.hasClass('person-link-processed')) return;
 
-            const href = decodeURIComponent(linkEl.getAttribute('href') || '');
-            const targetFile = this.app.metadataCache.getFirstLinkpathDest(href, ctx.sourcePath);
+                    const targetFile = this.tryGetLinkTarget(element, ctx.sourcePath);
+                    if (!targetFile) return;
 
-            if (targetFile?.path.startsWith(this.settings.peopleFolderPath)) {
-                const cache = this.app.metadataCache.getFileCache(targetFile);
-                if (cache?.frontmatter?.avatar) {
-                    this.processPersonLink(linkEl as HTMLElement, cache);
+                    if (targetFile.path.startsWith(this.settings.peopleFolderPath)) {
+                        const cache = this.app.metadataCache.getFileCache(targetFile);
+                        if (cache?.frontmatter?.avatar) {
+                            this.processPersonLink(element, cache);
+                        }
+                    }
+                } catch (e) {
+                    console.debug('Error processing link in section:', e);
                 }
-            }
-        });
+            });
+        } catch (e) {
+            console.debug('Error in processSection:', e);
+        }
     }
 
     private processAllLinksInView(view: MarkdownView) {
-        const links = Array.from(view.contentEl.querySelectorAll([
-            'a.internal-link',                // Preview mode links
-            '.cm-underline',                 // Editor mode link text (anywhere)
-            '.cm-hmd-internal-link'         // Editor mode containers (anywhere)
-        ].join(', ')));
+        if (!view?.contentEl?.isConnected) return;
 
-        links.forEach(linkEl => {
-            const linkElement = linkEl as HTMLElement;
-            if (linkElement.hasClass('person-link-processed')) return;
+        try {
+            const links = Array.from(view.contentEl.querySelectorAll([
+                'a.internal-link',                // Preview mode links
+                '.cm-underline',                 // Editor mode link text (anywhere)
+                '.cm-hmd-internal-link'         // Editor mode containers (anywhere)
+            ].join(', ')));
 
-            // Determine the element to process
-            let elementToProcess = linkElement;
-            if (linkElement.classList.contains('cm-underline')) {
-                const container = linkElement.closest('.cm-hmd-internal-link');
-                elementToProcess = (container as HTMLElement) || linkElement;
-            }
+            links.forEach(linkEl => {
+                try {
+                    const element = linkEl as HTMLElement;
+                    if (element.hasClass('person-link-processed')) return;
 
-            const text = linkElement.textContent || '';
-            // Check both href and data-href for footer links
-            const href = linkElement.getAttribute('href') || linkElement.getAttribute('data-href');
-            const linkPath = href || text;
+                    // Determine the element to process
+                    let elementToProcess = element;
+                    if (element.classList.contains('cm-underline')) {
+                        const container = element.closest('.cm-hmd-internal-link');
+                        elementToProcess = (container as HTMLElement) || element;
+                    }
 
-            if (!linkPath) return;
+                    const targetFile = this.tryGetLinkTarget(element, view.file?.path || '');
+                    if (!targetFile) return;
 
-            const file = this.app.metadataCache.getFirstLinkpathDest(
-                decodeURIComponent(linkPath),
-                view.file?.path || ''
-            );
-
-            if (file?.path.startsWith(this.settings.peopleFolderPath)) {
-                const cache = this.app.metadataCache.getFileCache(file);
-                if (cache?.frontmatter?.avatar) {
-                    this.processPersonLink(linkElement, cache);
+                    if (targetFile.path.startsWith(this.settings.peopleFolderPath)) {
+                        const cache = this.app.metadataCache.getFileCache(targetFile);
+                        if (cache?.frontmatter?.avatar) {
+                            this.processPersonLink(elementToProcess, cache);
+                        }
+                    }
+                } catch (e) {
+                    console.debug('Error processing link:', e);
                 }
-            }
-        });
+            });
+        } catch (e) {
+            console.debug('Error in processAllLinksInView:', e);
+        }
     }
 
     private processPersonLink(linkEl: HTMLElement, cache: any) {
