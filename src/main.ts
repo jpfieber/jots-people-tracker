@@ -88,8 +88,8 @@ export default class PeopleTrackerPlugin extends Plugin {
     private processAllLinksInView(view: MarkdownView) {
         const links = Array.from(view.contentEl.querySelectorAll([
             'a.internal-link',                // Preview mode links
-            '.cm-line .cm-underline',        // Editor mode link text
-            '.cm-line .cm-hmd-internal-link' // Editor mode containers
+            '.cm-underline',                 // Editor mode link text (anywhere)
+            '.cm-hmd-internal-link'         // Editor mode containers (anywhere)
         ].join(', ')));
 
         links.forEach(linkEl => {
@@ -104,7 +104,8 @@ export default class PeopleTrackerPlugin extends Plugin {
             }
 
             const text = linkElement.textContent || '';
-            const href = linkElement.getAttribute('href');
+            // Check both href and data-href for footer links
+            const href = linkElement.getAttribute('href') || linkElement.getAttribute('data-href');
             const linkPath = href || text;
 
             if (!linkPath) return;
