@@ -1,4 +1,4 @@
-import { Plugin, MarkdownPostProcessorContext, TFile, MarkdownView } from 'obsidian';
+import { Plugin, MarkdownPostProcessorContext, TFile, MarkdownView, WorkspaceLeaf } from 'obsidian';
 import { PeopleTrackerSettings, PeopleTrackerSettingTab, DEFAULT_SETTINGS } from './settings';
 
 export default class PeopleTrackerPlugin extends Plugin {
@@ -6,66 +6,37 @@ export default class PeopleTrackerPlugin extends Plugin {
     private processTimer: NodeJS.Timeout | null = null;
 
     async onload() {
-        console.log('=============================');
-        console.log('People Tracker Plugin Loading');
-        console.log('=============================');
-
         await this.loadSettings();
         this.addSettingTab(new PeopleTrackerSettingTab(this.app, this));
 
-        // Register for file opens
         this.registerEvent(
-            this.app.workspace.on('file-open', (file) => {
-                if (!file) return;
-                this.processCurrentView();
-            })
+            this.app.workspace.on('file-open', () => this.processCurrentView())
         );
 
-        // Register markdown processor for live updates
-        this.registerMarkdownPostProcessor((el, ctx) => {
-            this.processSection(el, ctx);
-        });
-
-        // Register for editor changes with aggressive reprocessing
+        this.registerMarkdownPostProcessor((el, ctx) => this.processSection(el, ctx));
         this.registerEditorEvents();
     }
 
     private registerEditorEvents() {
-        // Process on editor focus and changes
+        // Handle editor state changes
         this.registerEvent(
-            this.app.workspace.on('active-leaf-change', () => {
-                this.processCurrentView();
-                // Reprocess after a delay to catch any redraws
-                setTimeout(() => this.processCurrentView(), 200);
-            })
+            this.app.workspace.on('active-leaf-change', () => this.handleEditorChange())
+        );
+        this.registerEvent(
+            this.app.workspace.on('editor-change', () => this.handleEditorChange())
         );
 
-        // Process on any editor change
-        this.registerEvent(
-            this.app.workspace.on('editor-change', () => {
-                this.processCurrentView();
-                // Reprocess after a delay
-                setTimeout(() => this.processCurrentView(), 100);
-            })
-        );
-
-        // Monitor DOM mutations in the editor
+        // Monitor editor mutations
         const observer = new MutationObserver((mutations) => {
-            const shouldProcess = mutations.some(mutation => {
-                // Only process if we see relevant class changes or content changes
-                return (
-                    mutation.type === 'attributes' && mutation.attributeName === 'class' ||
-                    mutation.type === 'childList' ||
-                    mutation.type === 'characterData'
-                );
-            });
-
-            if (shouldProcess) {
+            if (mutations.some(m =>
+                m.type === 'attributes' && m.attributeName === 'class' ||
+                m.type === 'childList' ||
+                m.type === 'characterData'
+            )) {
                 this.processCurrentView();
             }
         });
 
-        // Update observer when layout changes
         this.registerEvent(
             this.app.workspace.on('layout-change', () => {
                 const view = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -82,33 +53,30 @@ export default class PeopleTrackerPlugin extends Plugin {
         );
     }
 
+    private handleEditorChange() {
+        this.processCurrentView();
+        setTimeout(() => this.processCurrentView(), 100);
+    }
+
     private processCurrentView() {
+        if (this.processTimer) clearTimeout(this.processTimer);
+
         const view = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (!view) return;
 
-        // Clear any existing timer
-        if (this.processTimer) {
-            clearTimeout(this.processTimer);
-        }
-
-        // Process immediately
+        // Process immediately and schedule a follow-up
         this.processAllLinksInView(view);
-
-        // Schedule another process after a delay to catch any redraws
-        this.processTimer = setTimeout(() => {
-            this.processAllLinksInView(view);
-        }, 100);
+        this.processTimer = setTimeout(() => this.processAllLinksInView(view), 100);
     }
 
     private processSection(el: HTMLElement, ctx: MarkdownPostProcessorContext) {
-        const links = el.querySelectorAll('a.internal-link');
-        links.forEach(linkEl => {
+        el.querySelectorAll('a.internal-link').forEach(linkEl => {
             if ((linkEl as HTMLElement).hasClass('person-link-processed')) return;
 
             const href = decodeURIComponent(linkEl.getAttribute('href') || '');
             const targetFile = this.app.metadataCache.getFirstLinkpathDest(href, ctx.sourcePath);
 
-            if (targetFile && targetFile.path.replace(/\\/g, '/').startsWith('Sets/People/')) {
+            if (targetFile?.path.startsWith(this.settings.peopleFolderPath)) {
                 const cache = this.app.metadataCache.getFileCache(targetFile);
                 if (cache?.frontmatter?.avatar) {
                     this.processPersonLink(linkEl as HTMLElement, cache);
@@ -118,36 +86,25 @@ export default class PeopleTrackerPlugin extends Plugin {
     }
 
     private processAllLinksInView(view: MarkdownView) {
-        const container = view.contentEl;
-
-        // Get both wiki-links and internal links
-        const allLinks = Array.from(container.querySelectorAll([
-            'a.internal-link',                      // Preview mode links
-            '.cm-line .cm-underline',             // Editor mode link text
-            '.cm-line .cm-hmd-internal-link'      // Editor mode containers
+        const links = Array.from(view.contentEl.querySelectorAll([
+            'a.internal-link',                // Preview mode links
+            '.cm-line .cm-underline',        // Editor mode link text
+            '.cm-line .cm-hmd-internal-link' // Editor mode containers
         ].join(', ')));
 
-        allLinks.forEach(linkEl => {
-            // Skip already processed elements to prevent duplication
-            if ((linkEl as HTMLElement).hasClass('person-link-processed')) return;
-
-            // For editor mode, we need to find the right element to process
+        links.forEach(linkEl => {
             const linkElement = linkEl as HTMLElement;
-            let elementToProcess: HTMLElement;
+            if (linkElement.hasClass('person-link-processed')) return;
 
+            // Determine the element to process
+            let elementToProcess = linkElement;
             if (linkElement.classList.contains('cm-underline')) {
                 const container = linkElement.closest('.cm-hmd-internal-link');
                 elementToProcess = (container as HTMLElement) || linkElement;
-            } else if (linkElement.classList.contains('cm-hmd-internal-link')) {
-                elementToProcess = linkElement;
-            } else {
-                elementToProcess = linkElement;
             }
 
-            if (!elementToProcess || (elementToProcess as HTMLElement).hasClass('person-link-processed')) return;
-
-            const text = linkEl.textContent || '';
-            const href = (linkEl as HTMLElement).getAttribute('href');
+            const text = linkElement.textContent || '';
+            const href = linkElement.getAttribute('href');
             const linkPath = href || text;
 
             if (!linkPath) return;
@@ -157,50 +114,49 @@ export default class PeopleTrackerPlugin extends Plugin {
                 view.file?.path || ''
             );
 
-            if (file && file.path.replace(/\\/g, '/').startsWith('Sets/People/')) {
+            if (file?.path.startsWith(this.settings.peopleFolderPath)) {
                 const cache = this.app.metadataCache.getFileCache(file);
                 if (cache?.frontmatter?.avatar) {
-                    this.processPersonLink(linkEl as HTMLElement, cache);
+                    this.processPersonLink(linkElement, cache);
                 }
             }
         });
     }
 
-    processPersonLink(linkEl: HTMLElement, cache: any) {
-        if (linkEl.hasClass('person-link-processed')) return;
-
+    private processPersonLink(linkEl: HTMLElement, cache: any) {
         const avatarName = cache.frontmatter.avatar;
         if (!avatarName) return;
 
-        // For editor mode links, we need to handle both the link and container elements
-        const parentElement = linkEl.closest('.cm-hmd-internal-link') || linkEl.closest('.HyperMD-link_link');
-        const elementToProcess = (parentElement || linkEl) as HTMLElement;
-
-        // Combine settings path with avatar name
-        const avatarPath = `${this.settings.avatarFolderPath}/${avatarName}`;
-        const imageUrl = this.app.vault.adapter.getResourcePath(avatarPath);
-
-        // Set data attributes and CSS variables
-        elementToProcess.setAttribute('data-link-avatar', imageUrl);
-        elementToProcess.style.setProperty('--data-link-avatar', `url(${imageUrl})`);
-
-        // Add necessary classes to both parent and link elements
-        elementToProcess.addClass('data-link-icon');
-        elementToProcess.addClass('person-link');
-        elementToProcess.addClass('person-link-processed');
-
-        // If this is an editor link, also style the underline element
-        if (parentElement && linkEl !== parentElement) {
-            linkEl.addClass('data-link-icon');
-            linkEl.addClass('person-link');
+        // Check for valid avatar name and required settings
+        if (!this.settings.avatarFolderPath) {
+            console.warn('Avatar folder path not configured in settings');
+            return;
         }
 
-        console.log('Processed link with avatar:', {
-            type: parentElement ? 'editor' : 'preview',
-            element: elementToProcess.outerHTML,
-            classes: elementToProcess.className,
-            style: elementToProcess.getAttribute('style')
-        });
+        // Determine elements to style
+        const parentElement = linkEl.closest('.cm-hmd-internal-link');
+        const elementToProcess = (parentElement || linkEl) as HTMLElement;
+
+        // Set up the avatar
+        const avatarPath = `${this.settings.avatarFolderPath}/${avatarName}`;
+
+        // Validate that the avatar file exists
+        if (!this.app.vault.adapter.exists(avatarPath)) {
+            console.warn(`Avatar file not found: ${avatarPath}`);
+            return;
+        }
+
+        const imageUrl = this.app.vault.adapter.getResourcePath(avatarPath);
+
+        // Apply styles
+        elementToProcess.setAttribute('data-link-avatar', imageUrl);
+        elementToProcess.style.setProperty('--data-link-avatar', `url(${imageUrl})`);
+        elementToProcess.addClass('data-link-icon', 'person-link', 'person-link-processed');
+
+        // Style the underline element in editor mode
+        if (parentElement && linkEl !== parentElement) {
+            linkEl.addClass('data-link-icon', 'person-link');
+        }
     }
 
     async loadSettings() {
@@ -208,10 +164,26 @@ export default class PeopleTrackerPlugin extends Plugin {
     }
 
     async saveSettings() {
-        await this.saveData(this.settings);
-    }
+        // Validate paths before saving
+        if (!this.settings.avatarFolderPath) {
+            console.warn('Avatar folder path is required');
+            return;
+        }
+        if (!this.settings.peopleFolderPath) {
+            console.warn('People folder path is required');
+            return;
+        }
 
-    onunload() {
-        console.log('People Tracker unloaded');
+        // Check if the paths exist in the vault
+        if (!await this.app.vault.adapter.exists(this.settings.avatarFolderPath)) {
+            console.warn(`Avatar folder does not exist: ${this.settings.avatarFolderPath}`);
+            return;
+        }
+        if (!await this.app.vault.adapter.exists(this.settings.peopleFolderPath)) {
+            console.warn(`People folder does not exist: ${this.settings.peopleFolderPath}`);
+            return;
+        }
+
+        await this.saveData(this.settings);
     }
 }

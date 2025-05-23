@@ -8,15 +8,12 @@ interface PeopleTrackerSettings {
 
 const DEFAULT_SETTINGS: PeopleTrackerSettings = {
     avatarFolderPath: '',
-    peopleFolderPath: ''
+    peopleFolderPath: 'Sets/People'
 };
 
 export class PeopleTrackerSettingTab extends PluginSettingTab {
-    plugin: PeopleTrackerPlugin;
-
-    constructor(app: App, plugin: PeopleTrackerPlugin) {
+    constructor(app: App, private plugin: PeopleTrackerPlugin) {
         super(app, plugin);
-        this.plugin = plugin;
     }
 
     display(): void {
@@ -55,8 +52,8 @@ export class PeopleTrackerSettingTab extends PluginSettingTab {
     private getFolderOptions(): Record<string, string> {
         const folders: Record<string, string> = {};
         this.app.vault.getAllLoadedFiles()
-            .filter((f: TAbstractFile) => f instanceof TFolder)
-            .forEach((folder: TAbstractFile) => {
+            .filter((f): f is TFolder => f instanceof TFolder)
+            .forEach(folder => {
                 folders[folder.path] = folder.path;
             });
         return folders;
