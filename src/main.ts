@@ -85,7 +85,7 @@ export default class PeopleTrackerPlugin extends Plugin {
                     if (element.hasClass('person-link-processed')) return;
 
                     const targetFile = this.tryGetLinkTarget(element, ctx.sourcePath);
-                    if (!targetFile) return;                    if (targetFile.path.startsWith(this.settings.peopleFolderPath)) {
+                    if (!targetFile) return; if (targetFile.path.startsWith(this.settings.peopleFolderPath)) {
                         const cache = this.app.metadataCache.getFileCache(targetFile);
                         // Only process if we have avatars enabled and either an avatar is defined or we want to show the default
                         if (this.settings.enableAvatars) {
@@ -124,7 +124,7 @@ export default class PeopleTrackerPlugin extends Plugin {
                     }
 
                     const targetFile = this.tryGetLinkTarget(element, view.file?.path || '');
-                    if (!targetFile) return;                    if (targetFile.path.startsWith(this.settings.peopleFolderPath)) {
+                    if (!targetFile) return; if (targetFile.path.startsWith(this.settings.peopleFolderPath)) {
                         const cache = this.app.metadataCache.getFileCache(targetFile);
                         if (this.settings.enableAvatars) {
                             this.processPersonLink(elementToProcess, cache);
