@@ -9,7 +9,7 @@ export default class PeopleTrackerPlugin extends Plugin {
         console.log('=============================');
         console.log('People Tracker Plugin Loading');
         console.log('=============================');
-        
+
         await this.loadSettings();
         this.addSettingTab(new PeopleTrackerSettingTab(this.app, this));
 
@@ -25,7 +25,7 @@ export default class PeopleTrackerPlugin extends Plugin {
         this.registerMarkdownPostProcessor((el, ctx) => {
             this.processSection(el, ctx);
         });
-        
+
         // Register for editor changes with aggressive reprocessing
         this.registerEditorEvents();
     }
@@ -59,7 +59,7 @@ export default class PeopleTrackerPlugin extends Plugin {
                     mutation.type === 'characterData'
                 );
             });
-            
+
             if (shouldProcess) {
                 this.processCurrentView();
             }
@@ -104,10 +104,10 @@ export default class PeopleTrackerPlugin extends Plugin {
         const links = el.querySelectorAll('a.internal-link');
         links.forEach(linkEl => {
             if ((linkEl as HTMLElement).hasClass('person-link-processed')) return;
-            
+
             const href = decodeURIComponent(linkEl.getAttribute('href') || '');
             const targetFile = this.app.metadataCache.getFirstLinkpathDest(href, ctx.sourcePath);
-            
+
             if (targetFile && targetFile.path.replace(/\\/g, '/').startsWith('Sets/People/')) {
                 const cache = this.app.metadataCache.getFileCache(targetFile);
                 if (cache?.frontmatter?.avatar) {
@@ -119,22 +119,22 @@ export default class PeopleTrackerPlugin extends Plugin {
 
     private processAllLinksInView(view: MarkdownView) {
         const container = view.contentEl;
-        
+
         // Get both wiki-links and internal links
         const allLinks = Array.from(container.querySelectorAll([
             'a.internal-link',                      // Preview mode links
             '.cm-line .cm-underline',             // Editor mode link text
             '.cm-line .cm-hmd-internal-link'      // Editor mode containers
         ].join(', ')));
-        
+
         allLinks.forEach(linkEl => {
             // Skip already processed elements to prevent duplication
             if ((linkEl as HTMLElement).hasClass('person-link-processed')) return;
-            
+
             // For editor mode, we need to find the right element to process
             const linkElement = linkEl as HTMLElement;
             let elementToProcess: HTMLElement;
-            
+
             if (linkElement.classList.contains('cm-underline')) {
                 const container = linkElement.closest('.cm-hmd-internal-link');
                 elementToProcess = (container as HTMLElement) || linkElement;
@@ -143,20 +143,20 @@ export default class PeopleTrackerPlugin extends Plugin {
             } else {
                 elementToProcess = linkElement;
             }
-            
+
             if (!elementToProcess || (elementToProcess as HTMLElement).hasClass('person-link-processed')) return;
-            
+
             const text = linkEl.textContent || '';
             const href = (linkEl as HTMLElement).getAttribute('href');
             const linkPath = href || text;
-            
+
             if (!linkPath) return;
-            
+
             const file = this.app.metadataCache.getFirstLinkpathDest(
-                decodeURIComponent(linkPath), 
+                decodeURIComponent(linkPath),
                 view.file?.path || ''
             );
-            
+
             if (file && file.path.replace(/\\/g, '/').startsWith('Sets/People/')) {
                 const cache = this.app.metadataCache.getFileCache(file);
                 if (cache?.frontmatter?.avatar) {
@@ -168,33 +168,33 @@ export default class PeopleTrackerPlugin extends Plugin {
 
     processPersonLink(linkEl: HTMLElement, cache: any) {
         if (linkEl.hasClass('person-link-processed')) return;
-        
+
         const avatarName = cache.frontmatter.avatar;
         if (!avatarName) return;
-        
+
         // For editor mode links, we need to handle both the link and container elements
         const parentElement = linkEl.closest('.cm-hmd-internal-link') || linkEl.closest('.HyperMD-link_link');
         const elementToProcess = (parentElement || linkEl) as HTMLElement;
-        
+
         // Combine settings path with avatar name
         const avatarPath = `${this.settings.avatarFolderPath}/${avatarName}`;
         const imageUrl = this.app.vault.adapter.getResourcePath(avatarPath);
-        
+
         // Set data attributes and CSS variables
         elementToProcess.setAttribute('data-link-avatar', imageUrl);
         elementToProcess.style.setProperty('--data-link-avatar', `url(${imageUrl})`);
-        
+
         // Add necessary classes to both parent and link elements
         elementToProcess.addClass('data-link-icon');
         elementToProcess.addClass('person-link');
         elementToProcess.addClass('person-link-processed');
-        
+
         // If this is an editor link, also style the underline element
         if (parentElement && linkEl !== parentElement) {
             linkEl.addClass('data-link-icon');
             linkEl.addClass('person-link');
         }
-        
+
         console.log('Processed link with avatar:', {
             type: parentElement ? 'editor' : 'preview',
             element: elementToProcess.outerHTML,
@@ -202,7 +202,7 @@ export default class PeopleTrackerPlugin extends Plugin {
             style: elementToProcess.getAttribute('style')
         });
     }
-    
+
     async loadSettings() {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     }

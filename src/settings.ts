@@ -28,7 +28,7 @@ export class PeopleTrackerSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName('Avatar folder path')
             .setDesc('Path to folder containing avatar images')
-            .addDropdown(dropdown => 
+            .addDropdown(dropdown =>
                 dropdown
                     .addOptions(this.getFolderOptions())
                     .setValue(this.plugin.settings.avatarFolderPath)
@@ -41,7 +41,7 @@ export class PeopleTrackerSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName('People folder path')
             .setDesc('Path to folder containing people notes')
-            .addDropdown(dropdown => 
+            .addDropdown(dropdown =>
                 dropdown
                     .addOptions(this.getFolderOptions())
                     .setValue(this.plugin.settings.peopleFolderPath)
