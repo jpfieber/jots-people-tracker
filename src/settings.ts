@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, TFolder, TAbstractFile } from 'obsidian';
+import { App, PluginSettingTab, Setting, TFolder, TAbstractFile, AbstractInputSuggest } from 'obsidian';
 import PeopleTrackerPlugin from './main';
 
 interface PeopleTrackerSettings {
@@ -12,6 +12,39 @@ const DEFAULT_SETTINGS: PeopleTrackerSettings = {
     avatarFolderPath: '',
     peopleFolderPath: 'Sets/People'
 };
+
+class FolderSuggest extends AbstractInputSuggest<TFolder> {
+    constructor(app: App, private inputEl: HTMLInputElement) {
+        super(app, inputEl);
+    }
+
+    getSuggestions(inputStr: string): TFolder[] {
+        const abstractFiles = this.app.vault.getAllLoadedFiles();
+        const folders: TFolder[] = [];
+        const lowerCaseInputStr = inputStr.toLowerCase();
+
+        abstractFiles.forEach((file: TAbstractFile) => {
+            if (
+                file instanceof TFolder &&
+                file.path.toLowerCase().contains(lowerCaseInputStr)
+            ) {
+                folders.push(file);
+            }
+        });
+
+        return folders;
+    }
+
+    renderSuggestion(folder: TFolder, el: HTMLElement): void {
+        el.setText(folder.path);
+    }
+
+    selectSuggestion(folder: TFolder): void {
+        this.inputEl.value = folder.path;
+        this.inputEl.trigger("input");
+        this.close();
+    }
+}
 
 export class PeopleTrackerSettingTab extends PluginSettingTab {
     constructor(app: App, private plugin: PeopleTrackerPlugin) {
@@ -42,15 +75,15 @@ export class PeopleTrackerSettingTab extends PluginSettingTab {
             const avatarSetting = new Setting(containerEl)
                 .setName('Avatar folder path')
                 .setDesc('Path to folder containing avatar images')
-                .addDropdown(dropdown =>
-                    dropdown
-                        .addOptions(this.getFolderOptions())
+                .addText(text => {
+                    new FolderSuggest(this.app, text.inputEl);
+                    text.setPlaceholder('Example: _Meta/Avatars')
                         .setValue(this.plugin.settings.avatarFolderPath)
                         .onChange(async (value) => {
                             this.plugin.settings.avatarFolderPath = value;
                             await this.plugin.saveSettings();
-                        })
-                );
+                        });
+                });
 
             // Add indentation to the setting
             avatarSetting.settingEl.style.paddingLeft = '2em';
@@ -59,25 +92,15 @@ export class PeopleTrackerSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName('People folder path')
             .setDesc('Path to folder containing people notes')
-            .addDropdown(dropdown =>
-                dropdown
-                    .addOptions(this.getFolderOptions())
+            .addText(text => {
+                new FolderSuggest(this.app, text.inputEl);
+                text.setPlaceholder('Example: Sets/People')
                     .setValue(this.plugin.settings.peopleFolderPath)
                     .onChange(async (value) => {
                         this.plugin.settings.peopleFolderPath = value;
                         await this.plugin.saveSettings();
-                    })
-            );
-    }
-
-    private getFolderOptions(): Record<string, string> {
-        const folders: Record<string, string> = {};
-        this.app.vault.getAllLoadedFiles()
-            .filter((f): f is TFolder => f instanceof TFolder)
-            .forEach(folder => {
-                folders[folder.path] = folder.path;
+                    });
             });
-        return folders;
     }
 }
 
